@@ -63,7 +63,8 @@ def aggregate_graph(prepared: Path, clustering: Path, resources: Resources):
                 ).fetchone()
                 internal_counts = np.zeros(k, dtype=np.uint64)
                 for batch in query_batches(
-                    con.execute("SELECT source,weight FROM quotient WHERE source=target"),
+                    con,
+                    "SELECT source,weight FROM quotient WHERE source=target",
                     resources.batch_rows,
                 ):
                     internal_counts[batch.column(0).to_numpy()] = batch.column(1).to_numpy()
