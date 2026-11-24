@@ -147,10 +147,11 @@ def build_hierarchy(quotient: Path, resources: Resources, targets=(16, 64, 256))
                     literal(quotient / "edges.parquet"),
                     literal(quotient / "nodes.parquet"),
                 )
-                result = con.execute(
-                    f"SELECT e.source,e.target FROM read_parquet({edge_path}) e JOIN read_parquet({node_path}) a ON e.source=a.community JOIN read_parquet({node_path}) b ON e.target=b.community WHERE e.source<>e.target ORDER BY e.weight::DOUBLE/sqrt(a.node_count::DOUBLE*b.node_count::DOUBLE) DESC,e.source,e.target"
+                reader = query_batches(
+                    con,
+                    f"SELECT e.source,e.target FROM read_parquet({edge_path}) e JOIN read_parquet({node_path}) a ON e.source=a.community JOIN read_parquet({node_path}) b ON e.target=b.community WHERE e.source<>e.target ORDER BY e.weight::DOUBLE/sqrt(a.node_count::DOUBLE*b.node_count::DOUBLE) DESC,e.source,e.target",
+                    resources.batch_rows,
                 )
-                reader = query_batches(result, resources.batch_rows)
                 for batch in reader:
                     if not targets:
                         break
@@ -162,6 +163,7 @@ def build_hierarchy(quotient: Path, resources: Resources, targets=(16, 64, 256))
                         )
                         if remaining <= targets[0]:
                             save_cut(targets.pop(0))
+                reader.close()  # the loop may stop before the result is read to its end
                 if targets:
                     # Preserve the forest, even if its component count exceeds a requested cap.
                     save_cut(targets[-1])

@@ -29,6 +29,12 @@ the producing source and library versions. They are measurement records, not
 analysis inputs for the current format. Naming/API cleanup is covered by current
 integration tests; it is not presented as another full-scale measurement.
 
+The same command was repeated on the same host and input with DuckDB 2.0.1 and
+pyarrow 26.0.0, twice, under the same limits: 455.14 and 462.55 seconds, with
+zero OOM events and zero swap. `neighbors.u32` and `labels.npy` were
+byte-identical to the recorded run. Two runs of the DuckDB 1.5.6 code on the
+same day took 489.25 and 488.84 seconds. The table remains the recorded run.
+
 ## Real-network comparison
 
 The [SNAP Facebook comparison](comparisons.md) records fresh-process runs on

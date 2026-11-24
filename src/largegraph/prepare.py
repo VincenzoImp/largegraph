@@ -32,8 +32,11 @@ def batches(path: Path, batch_rows: int = 250_000, columns=None):
     yield from pq.ParquetFile(path).iter_batches(batch_size=batch_rows, columns=columns)
 
 
-def query_batches(connection, batch_rows):
-    return connection.to_arrow_reader(batch_rows)
+def query_batches(con, query: str, batch_rows):
+    # Streamed from a cursor of its own. DuckDB 2 copies the whole result of
+    # execute() before Arrow reads it, and refuses a relation on a connection
+    # whose last execute() result was not read to its end.
+    return con.cursor().sql(query).to_arrow_reader(batch_rows)
 
 
 def copy_query(con, query: str, path: Path, csv: bool = False):
@@ -176,9 +179,8 @@ def prepare_graph(
                 if not steps.done("adjacency"):
                     edges = f"read_parquet({literal(out / 'edges.parquet')})"
                     reader = query_batches(
-                        con.execute(
-                            f"SELECT target FROM (SELECT source,target FROM {edges} UNION ALL SELECT target AS source,source AS target FROM {edges}) ORDER BY source,target"
-                        ),
+                        con,
+                        f"SELECT target FROM (SELECT source,target FROM {edges} UNION ALL SELECT target AS source,source AS target FROM {edges}) ORDER BY source,target",
                         resources.batch_rows,
                     )
                     with (out / "neighbors.u32").open("wb") as stream:
