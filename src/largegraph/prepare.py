@@ -33,13 +33,10 @@ def batches(path: Path, batch_rows: int = 250_000, columns=None):
 
 
 def query_batches(con, query: str, batch_rows):
-    # Since DuckDB 2 a streamed result ignores ORDER BY while
-    # preserve_insertion_order is off, so it is on for the length of the read.
-    con.execute("SET preserve_insertion_order = true")
-    try:
-        yield from con.execute(query).to_arrow_reader(batch_rows)
-    finally:
-        con.execute("SET preserve_insertion_order = false")
+    # Streamed from a cursor of its own. DuckDB 2 copies the whole result of
+    # execute() before Arrow reads it, and refuses a relation on a connection
+    # whose last execute() result was not read to its end.
+    return con.cursor().sql(query).to_arrow_reader(batch_rows)
 
 
 def copy_query(con, query: str, path: Path, csv: bool = False):
