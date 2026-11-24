@@ -39,6 +39,8 @@ jobs:
           path: runs/ci-demo/report
   browser-and-package:
     runs-on: ubuntu-latest
+    outputs:
+      sha256: ${{ steps.checksums.outputs.sha256 }}
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7
@@ -59,21 +61,32 @@ jobs:
           cd /tmp
           /tmp/largegraph-wheel/bin/largegraph demo --output packaged-demo
           /tmp/largegraph-wheel/bin/largegraph verify packaged-demo --deep
+      - name: Record the distributions' checksums
+        id: checksums
+        run: |
+          {
+            echo "sha256<<EOF"
+            (cd dist && sha256sum *.whl *.tar.gz)
+            echo EOF
+          } >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v7
         with:
           name: distributions
           path: dist/*
+  # A second job, as in the publish workflow: an artifact is not always listed
+  # in the seconds after its upload, and a re-run would read an earlier attempt's.
+  package-roundtrip:
+    needs: browser-and-package
+    runs-on: ubuntu-latest
+    steps:
       - uses: actions/download-artifact@v8
         with:
           name: distributions
-          path: artifact-roundtrip/
+          path: dist/
       - name: Verify distribution upload and download preserve every byte
+        working-directory: dist
+        env:
+          SHA256: ${{ needs.browser-and-package.outputs.sha256 }}
         run: |
-          uv run --no-sync python - <<'PY'
-          from pathlib import Path
-          original = [*Path("dist").glob("*.whl"), *Path("dist").glob("*.tar.gz")]
-          received = list(Path("artifact-roundtrip").iterdir())
-          assert len(original) == 2
-          assert {p.name for p in received} == {p.name for p in original}
-          assert all((Path("artifact-roundtrip") / p.name).read_bytes() == p.read_bytes() for p in original)
-          PY
+          test "$(ls | wc -l)" -eq 2
+          sha256sum --check --strict <<< "$SHA256"
